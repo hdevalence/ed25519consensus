@@ -4,7 +4,10 @@
 
 package edwards25519
 
-import "encoding/binary"
+import (
+	"bytes"
+	"encoding/binary"
+)
 
 // This code is a port of the public domain, “ref10” implementation of ed25519
 // from SUPERCOP.
@@ -677,6 +680,13 @@ func (p *ProjectiveGroupElement) ToBytes(s *[32]byte) {
 	FeMul(&y, &p.Y, &recip)
 	FeToBytes(s, &y)
 	s[31] ^= FeIsNegative(&x) << 7
+}
+
+func (p *ProjectiveGroupElement) ToExtended(r *ExtendedGroupElement) {
+	FeMul(&r.X, &p.X, &p.Z)
+	FeMul(&r.Y, &p.Y, &p.Z)
+	FeSquare(&r.Z, &p.Z)
+	FeMul(&r.T, &p.X, &p.Y)
 }
 
 func (p *ExtendedGroupElement) Zero() {
@@ -1790,4 +1800,37 @@ func ScMinimal(scalar *[32]byte) bool {
 	}
 
 	return true
+}
+
+// CofactorEqual checks whether p, q are equal up to cofactor multiplication (ie. if their difference is of small order).
+func CofactorEqual(p *ExtendedGroupElement, q *ExtendedGroupElement) bool {
+	var t1 CachedGroupElement
+	var t2 CompletedGroupElement
+	var t3 ProjectiveGroupElement
+	
+	q.ToCached(&t1)
+	geSub(&t2, p, &t1)   // t2 =    (P - Q)
+	t2.ToProjective(&t3) // t3 =    (P - Q)
+	t3.Double(&t2)       // t2 = [2](P - Q)
+	t2.ToProjective(&t3) // t3 = [2](P - Q)
+	t3.Double(&t2)       // t2 = [4](P - Q)
+	t2.ToProjective(&t3) // t3 = [4](P - Q)
+	t3.Double(&t2)       // t2 = [8](P - Q)
+	t2.ToProjective(&t3) // t3 = [8](P - Q)
+
+	// Now we want to check whether the point t3 is the identity.
+	// In projective coordinates this is (X:Y:Z) ~ (0:1:0)
+	// ie. X/Z = 0, Y/Z = 1
+	// <=> X = 0, Y = Z
+
+	var zero [32]byte
+	var xBytes [32]byte
+	var yBytes [32]byte
+	var zBytes [32]byte
+
+	FeToBytes(&xBytes, &t3.X)
+	FeToBytes(&yBytes, &t3.Y)
+	FeToBytes(&zBytes, &t3.Z)
+
+	return bytes.Equal(zero[:], xBytes[:]) && bytes.Equal(yBytes[:], zBytes[:])
 }

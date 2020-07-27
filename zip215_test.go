@@ -15,7 +15,7 @@ func TestCases(t *testing.T) {
 		if err != nil {
 			t.Error(err)
 		}
-		ok := Verify(vk, []byte("Zcash"), sig)
+		ok := VerifyConsensus(vk, []byte("Zcash"), sig)
 		if !ok {
 			t.Errorf("ZIP215 test %d failed to verify", i)
 		}
