@@ -4,7 +4,7 @@
 
 // +build !s390x
 
-package ed25519
+package ed25519consensus
 
 func sign(signature, privateKey, message []byte) {
 	signGeneric(signature, privateKey, message)

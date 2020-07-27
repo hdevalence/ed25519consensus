@@ -2,14 +2,14 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-package ed25519
+package ed25519consensus
 
 import (
+	"./internal/edwards25519"
 	"bufio"
 	"bytes"
 	"compress/gzip"
 	"crypto"
-	"crypto/ed25519/internal/edwards25519"
 	"crypto/rand"
 	"encoding/hex"
 	"os"

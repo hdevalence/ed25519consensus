@@ -10,15 +10,15 @@
 // representation includes a public key suffix to make multiple signing
 // operations with the same key more efficient. This package refers to the RFC
 // 8032 private key as the “seed”.
-package ed25519
+package ed25519consensus
 
 // This code is a port of the public domain, “ref10” implementation of ed25519
 // from SUPERCOP.
 
 import (
+	"./internal/edwards25519"
 	"bytes"
 	"crypto"
-	"crypto/ed25519/internal/edwards25519"
 	cryptorand "crypto/rand"
 	"crypto/sha512"
 	"errors"
