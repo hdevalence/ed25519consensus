@@ -5,7 +5,6 @@
 package ed25519consensus
 
 import (
-	"./internal/edwards25519"
 	"bufio"
 	"bytes"
 	"compress/gzip"
@@ -15,6 +14,8 @@ import (
 	"os"
 	"strings"
 	"testing"
+
+	"github.com/hdevalence/ed25519consensus/internal/edwards25519"
 )
 
 type zeroReader struct{}

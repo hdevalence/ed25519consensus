@@ -24,6 +24,8 @@ import (
 	"errors"
 	"io"
 	"strconv"
+
+	"github.com/hdevalence/ed25519consensus/internal/edwards25519"
 )
 
 const (
