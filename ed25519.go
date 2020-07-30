@@ -9,7 +9,6 @@ package ed25519consensus
 import (
 	"crypto/ed25519"
 	"crypto/sha512"
-	"strconv"
 
 	"github.com/hdevalence/ed25519consensus/internal/edwards25519"
 )
@@ -17,11 +16,9 @@ import (
 // Verify reports whether sig is a valid signature of message by
 // publicKey, using precisely-specified validation criteria (ZIP 215) suitable
 // for use in consensus-critical contexts.
-//
-// It will panic if len(publicKey) is not ed25519.PublicKeySize.
 func Verify(publicKey ed25519.PublicKey, message, sig []byte) bool {
 	if l := len(publicKey); l != ed25519.PublicKeySize {
-		panic("ed25519: bad public key length: " + strconv.Itoa(l))
+		return false
 	}
 
 	if len(sig) != ed25519.SignatureSize || sig[63]&224 != 0 {
