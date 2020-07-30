@@ -1,3 +1,7 @@
+// Copyright 2016 Henry de Valence. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package ed25519consensus
 
 import (
@@ -5,17 +9,17 @@ import (
 	"testing"
 )
 
-func TestCases(t *testing.T) {
+func TestZIP215(t *testing.T) {
 	for i, c := range cases {
-		vk, err := hex.DecodeString(c.vk_hex)
+		vk, err := hex.DecodeString(c.vkHex)
 		if err != nil {
 			t.Error(err)
 		}
-		sig, err := hex.DecodeString(c.sig_hex)
+		sig, err := hex.DecodeString(c.sigHex)
 		if err != nil {
 			t.Error(err)
 		}
-		ok := VerifyConsensus(vk, []byte("Zcash"), sig)
+		ok := Verify(vk, []byte("Zcash"), sig)
 		if !ok {
 			t.Errorf("ZIP215 test %d failed to verify", i)
 		}
@@ -23,8 +27,8 @@ func TestCases(t *testing.T) {
 }
 
 var cases = [196]struct {
-	vk_hex  string
-	sig_hex string
+	vkHex  string
+	sigHex string
 }{
 	{
 		"0100000000000000000000000000000000000000000000000000000000000000",

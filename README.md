@@ -1,7 +1,7 @@
 # Ed25519 for consensus-critical contexts.
 
 This library provides an Ed25519 implementation with validation rules intended
-for consensus-critical contexts, provided by the `VerifyConsensus` function.
+for consensus-critical contexts.
 
 Ed25519 signatures are widely used in consensus-critical contexts (e.g.,
 blockchains), where different nodes must agree on whether or not a given
@@ -33,13 +33,11 @@ precisely matched the wrong compile-time configuration of libsodium.
 
 This problem is fixed by [ZIP215], a specification of a precise set of
 validation criteria for Ed25519 signatures.
-This repository contains a fork of Go's `crypto/ed25519` module with support
-for [ZIP215].  In order to be backwards-compatible with existing users of
-`crypto/ed25519`, the ZIP215 validation rules are provided by a
-`VerifyConsensus` function.
+This repository contains a fork of Go's `crypto/ed25519` package with support
+for [ZIP215] verification.
 
 Note that the ZIP215 rules ensure that individual and batch verification are
-guaranteed to give the same results, so unlike `Verify`, `VerifyConsensus` is
+guaranteed to give the same results, so unlike `ed25519.Verify`, `ed25519consensus.Verify` is
 compatible with batch verification (though this is not yet implemented by this
 library).
 
