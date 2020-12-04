@@ -10,7 +10,7 @@ import (
 	"crypto/ed25519"
 	"crypto/sha512"
 
-	"github.com/hdevalence/ed25519consensus/internal/edwards25519"
+	"filippo.io/edwards25519"
 )
 
 // Verify reports whether sig is a valid signature of message by
@@ -25,15 +25,12 @@ func Verify(publicKey ed25519.PublicKey, message, sig []byte) bool {
 		return false
 	}
 
-	var A edwards25519.ExtendedGroupElement
-	var publicKeyBytes [32]byte
-	copy(publicKeyBytes[:], publicKey)
-	// ZIP215: this works because FromBytes does not check that encodings are canonical.
-	if !A.FromBytes(&publicKeyBytes) {
+	// ZIP215: this works because SetBytes does not check that encodings are canonical.
+	A, err := new(edwards25519.Point).SetBytes(publicKey)
+	if err != nil {
 		return false
 	}
-	edwards25519.FeNeg(&A.X, &A.X)
-	edwards25519.FeNeg(&A.T, &A.T)
+	A.Negate(A)
 
 	h := sha512.New()
 	h.Write(sig[:32])
@@ -42,32 +39,28 @@ func Verify(publicKey ed25519.PublicKey, message, sig []byte) bool {
 	var digest [64]byte
 	h.Sum(digest[:0])
 
-	var hReduced [32]byte
-	edwards25519.ScReduce(&hReduced, &digest)
+	hReduced := new(edwards25519.Scalar).SetUniformBytes(digest[:])
 
-	var r [32]byte
-	copy(r[:], sig[:32])
-	var checkR edwards25519.ExtendedGroupElement
-	// ZIP215: this works because FromBytes does not check that encodings are canonical.
-	if !checkR.FromBytes(&r) {
+	// ZIP215: this works because SetBytes does not check that encodings are canonical.
+	checkR, err := new(edwards25519.Point).SetBytes(sig[:32])
+	if err != nil {
 		return false
 	}
-
-	var s [32]byte
-	copy(s[:], sig[32:])
 
 	// https://tools.ietf.org/html/rfc8032#section-5.1.7 requires that s be in
 	// the range [0, order) in order to prevent signature malleability.
 	// ZIP215: This is also required by ZIP215.
-	if !edwards25519.ScMinimal(&s) {
+	s, err := new(edwards25519.Scalar).SetCanonicalBytes(sig[32:])
+	if err != nil {
 		return false
 	}
 
-	var Rproj edwards25519.ProjectiveGroupElement
-	var R edwards25519.ExtendedGroupElement
-	edwards25519.GeDoubleScalarMultVartime(&Rproj, &hReduced, &A, &s)
-	Rproj.ToExtended(&R)
+	R := new(edwards25519.Point).VarTimeDoubleScalarBaseMult(hReduced, A, s)
 
-	// ZIP215: We want to check [8](R - R') == 0
-	return edwards25519.CofactorEqual(&R, &checkR)
+	// ZIP215: We want to check [8](R - checkR) == 0
+	p := new(edwards25519.Point).Subtract(R, checkR)     // p = R - checkR
+	p.Add(p, p)                                          // p = [2]p
+	p.Add(p, p)                                          // p = [4]p
+	p.Add(p, p)                                          // p = [8]p
+	return p.Equal(edwards25519.NewIdentityPoint()) == 1 // p == 0
 }
