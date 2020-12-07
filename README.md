@@ -1,4 +1,4 @@
-# Ed25519 for consensus-critical contexts.
+# Ed25519 for consensus-critical contexts
 
 This library provides an Ed25519 implementation with validation rules intended
 for consensus-critical contexts.
