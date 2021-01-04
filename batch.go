@@ -8,13 +8,13 @@ import (
 	"filippo.io/edwards25519"
 )
 
-var B = edwards25519.NewGeneratorPoint()
-
+// Verifier holds entries of public keys, signature and a scalar which are used for batch verification.
 type Verifier struct {
 	entries   []ks
 	batchSize uint32
 }
 
+// ks represents the public key, signature and scalar which the caller wants to batch verify
 type ks struct {
 	pubkey    ed25519.PublicKey
 	signature []byte
