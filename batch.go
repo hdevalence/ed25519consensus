@@ -8,10 +8,9 @@ import (
 	"filippo.io/edwards25519"
 )
 
-// Verifier holds entries of public keys, signature and a scalar which are used for batch verification.
-type Verifier struct {
-	entries   []ks
-	batchSize uint32
+// BatchVerifier holds entries of public keys, signature and a scalar which are used for batch verification.
+type BatchVerifier struct {
+	entries []ks
 }
 
 // ks represents the public key, signature and scalar which the caller wants to batch verify
@@ -21,17 +20,16 @@ type ks struct {
 	k         *edwards25519.Scalar
 }
 
-// NewVerifier creates a Verifier that entries of signatures, keys and messages
+// NewBatchVerifier creates a Verifier that entries of signatures, keys and messages
 // can be added to for verification
-func NewVerifier() Verifier {
-	return Verifier{
-		entries:   []ks{},
-		batchSize: 0,
+func NewBatchVerifier() BatchVerifier {
+	return BatchVerifier{
+		entries: []ks{},
 	}
 }
 
-// Add adds an entry to the verifier and bumps the batch size.
-func (v *Verifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bool {
+// Add adds a (public key, signature, message) triple to the current batch.
+func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bool {
 	if l := len(publicKey); l != ed25519.PublicKeySize {
 		return false
 	}
@@ -56,14 +54,15 @@ func (v *Verifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bool {
 	}
 
 	v.entries = append(v.entries, ksS)
-	v.batchSize++
 
 	return true
 }
 
-// VerifyBatch batch verifies the keys, messages and signatures within the verifier.
-// If a failure arises it is unknown which key failed, the caller must verify each entry individually
-func (v *Verifier) VerifyBatch() bool {
+// Verify checks all entries in the current batch, returning `true` if
+// *all* entries are valid and `false` if *any one* entry is invalid.
+//
+// If a failure arises it is unknown which entry failed, the caller must verify each entry individually.
+func (v *BatchVerifier) VerifyBatch() bool {
 	// The batch verification equation is
 	//
 	// [-sum(z_i * s_i)]B + sum([z_i]R_i) + sum([z_i * k_i]A_i) = 0.
@@ -73,25 +72,25 @@ func (v *Verifier) VerifyBatch() bool {
 	// - s_i is the signature's s value;
 	// - k_i is the hash of the message and other data;
 	// - z_i is a random 128-bit Scalar.
-
-	svals := make([]edwards25519.Scalar, 1+v.batchSize+v.batchSize)
-	scalars := make([]*edwards25519.Scalar, 1+v.batchSize+v.batchSize)
+	vl := len(v.entries)
+	svals := make([]edwards25519.Scalar, 1+vl+vl)
+	scalars := make([]*edwards25519.Scalar, 1+vl+vl)
 	for i := range scalars {
 		scalars[i] = &svals[i]
 	}
 
 	Bcoeff := scalars[0]
-	Rcoeffs := scalars[1:][:int(v.batchSize)]
-	Acoeffs := scalars[1+v.batchSize:]
+	Rcoeffs := scalars[1:][:int(vl)]
+	Acoeffs := scalars[1+vl:]
 
-	pvals := make([]edwards25519.Point, 1+v.batchSize+v.batchSize)
-	points := make([]*edwards25519.Point, 1+v.batchSize+v.batchSize)
+	pvals := make([]edwards25519.Point, 1+vl+vl)
+	points := make([]*edwards25519.Point, 1+vl+vl)
 	for i := range points {
 		points[i] = &pvals[i]
 	}
 	B := points[0]
-	Rs := points[1:][:v.batchSize]
-	As := points[1+v.batchSize:]
+	Rs := points[1:][:vl]
+	As := points[1+vl:]
 
 	B.Set(edwards25519.NewGeneratorPoint())
 	for i, entry := range v.entries {
@@ -119,6 +118,9 @@ func (v *Verifier) VerifyBatch() bool {
 		Acoeffs[i].Multiply(Rcoeffs[i], entry.k)
 	}
 	Bcoeff.Negate(Bcoeff) // this term is subtracted in the summation
+
+	// purge BatchVerifier for reuse
+	v.entries = []ks{}
 
 	check := new(edwards25519.Point).VarTimeMultiScalarMult(scalars, points)
 	check.MultByCofactor(check)
