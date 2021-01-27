@@ -75,6 +75,8 @@ func (v *BatchVerifier) VerifyBatch() bool {
 	vl := len(v.entries)
 	svals := make([]edwards25519.Scalar, 1+vl+vl)
 	scalars := make([]*edwards25519.Scalar, 1+vl+vl)
+
+	// Populate scalars variable with concrete scalars to reduce heap allocation
 	for i := range scalars {
 		scalars[i] = &svals[i]
 	}
