@@ -8,34 +8,31 @@ import (
 	"filippo.io/edwards25519"
 )
 
-// BatchVerifier holds entries of public keys, signature and a scalar which are used for batch verification.
+// BatchVerifier accumulates batch entries with `Add`, before performing batch verification with `Verify`.
 type BatchVerifier struct {
-	entries []ks
+	entries []entry
 }
 
-// ks represents the public key, signature and scalar which the caller wants to batch verify
-type ks struct {
+// item represents a batch entry with the public key, signature and scalar which the caller wants to verify
+type entry struct {
 	pubkey    ed25519.PublicKey
 	signature []byte
 	k         *edwards25519.Scalar
 }
 
-// NewBatchVerifier creates a Verifier that entries of signatures, keys and messages
-// can be added to for verification
+// NewBatchVerifier creates an empty `BatchVerifier`.
 func NewBatchVerifier() BatchVerifier {
 	return BatchVerifier{
-		entries: []ks{},
+		entries: []entry{},
 	}
 }
 
-// Add adds a (public key, signature, message) triple to the current batch.
-func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bool {
-	if l := len(publicKey); l != ed25519.PublicKeySize {
-		return false
-	}
-
-	if len(sig) != ed25519.SignatureSize || sig[63]&224 != 0 {
-		return false
+// Add adds a (public key, message, sig) triple to the current batch.
+//
+// Panics if `sig` is not 64 bytes long.
+func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
+	if len(sig) != ed25519.SignatureSize {
+		panic("signature has wrong length")
 	}
 
 	h := sha512.New()
@@ -47,22 +44,28 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bo
 
 	k := new(edwards25519.Scalar).SetUniformBytes(digest[:])
 
-	ksS := ks{
+	e := entry{
 		pubkey:    publicKey,
 		signature: sig,
 		k:         k,
 	}
 
-	v.entries = append(v.entries, ksS)
-
-	return true
+	v.entries = append(v.entries, e)
 }
 
 // Verify checks all entries in the current batch, returning `true` if
 // *all* entries are valid and `false` if *any one* entry is invalid.
 //
 // If a failure arises it is unknown which entry failed, the caller must verify each entry individually.
-func (v *BatchVerifier) VerifyBatch() bool {
+//
+// Calling `Verify` on an empty batch returns `false`.
+func (v *BatchVerifier) Verify() bool {
+	vl := len(v.entries)
+	// Abort early on an empty batch, which probably indicates a bug
+	if vl == 0 {
+		return false
+	}
+
 	// The batch verification equation is
 	//
 	// [-sum(z_i * s_i)]B + sum([z_i]R_i) + sum([z_i * k_i]A_i) = 0.
@@ -72,7 +75,6 @@ func (v *BatchVerifier) VerifyBatch() bool {
 	// - s_i is the signature's s value;
 	// - k_i is the hash of the message and other data;
 	// - z_i is a random 128-bit Scalar.
-	vl := len(v.entries)
 	svals := make([]edwards25519.Scalar, 1+vl+vl)
 	scalars := make([]*edwards25519.Scalar, 1+vl+vl)
 
@@ -120,9 +122,6 @@ func (v *BatchVerifier) VerifyBatch() bool {
 		Acoeffs[i].Multiply(Rcoeffs[i], entry.k)
 	}
 	Bcoeff.Negate(Bcoeff) // this term is subtracted in the summation
-
-	// purge BatchVerifier for reuse
-	v.entries = []ks{}
 
 	check := new(edwards25519.Point).VarTimeMultiScalarMult(scalars, points)
 	check.MultByCofactor(check)
