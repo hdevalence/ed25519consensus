@@ -17,6 +17,15 @@ func TestBatch(t *testing.T) {
 	}
 }
 
+func TestBatchFailsOnShortSig(t *testing.T) {
+	v := NewBatchVerifier()
+	pub, _, _ := ed25519.GenerateKey(nil)
+	v.Add(pub, []byte("message"), []byte{})
+	if v.Verify() {
+		t.Error("batch verification should fail due to short signature")
+	}
+}
+
 func TestBatchFailsOnCorruptKey(t *testing.T) {
 	v := NewBatchVerifier()
 	populateBatchVerifier(t, &v)

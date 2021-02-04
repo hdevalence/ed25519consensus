@@ -28,15 +28,24 @@ func NewBatchVerifier() BatchVerifier {
 }
 
 // Add adds a (public key, message, sig) triple to the current batch.
-//
-// Panics if `sig` is not 64 bytes long.
 func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
-	if len(sig) != ed25519.SignatureSize {
-		panic("signature has wrong length")
-	}
+	// Compute the challenge scalar for this entry upfront, so that we don't
+	// introduce a dependency on the lifetime of the message array. This doesn't
+	// matter so much for Go, which has garbage collection, but did matter for
+	// the Rust implementation this was ported from, but not keeping buffers
+	// alive for longer than they have to is nice to do anyways.
 
 	h := sha512.New()
-	h.Write(sig[:32])
+
+	// R_bytes is the first 32 bytes of the signature, but because the signature
+	// is passed as a variable-length array it could be too short. In that case
+	// we'll fail in Verify, so just avoid a panic here.
+	n := 32
+	if len(sig) < n {
+		n = len(sig)
+	}
+	h.Write(sig[:n])
+
 	h.Write(publicKey)
 	h.Write(message)
 	var digest [64]byte
@@ -98,6 +107,12 @@ func (v *BatchVerifier) Verify() bool {
 
 	B.Set(edwards25519.NewGeneratorPoint())
 	for i, entry := range v.entries {
+		// Check that the signature is exactly 64 bytes upfront,
+		// so that we can slice it later without potential panics
+		if len(entry.signature) != 64 {
+			return false
+		}
+
 		if _, err := Rs[i].SetBytes(entry.signature[:32]); err != nil {
 			return false
 		}
