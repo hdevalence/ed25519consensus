@@ -12,31 +12,53 @@ func TestBatch(t *testing.T) {
 	v := NewBatchVerifier()
 	populateBatchVerifier(t, &v)
 
-	if !v.VerifyBatch() {
+	if !v.Verify() {
 		t.Error("failed batch verification")
 	}
+}
 
-	// corrput a key to check batch verification fails
+func TestBatchFailsOnShortSig(t *testing.T) {
+	v := NewBatchVerifier()
+	pub, _, _ := ed25519.GenerateKey(nil)
+	v.Add(pub, []byte("message"), []byte{})
+	if v.Verify() {
+		t.Error("batch verification should fail due to short signature")
+	}
+}
+
+func TestBatchFailsOnCorruptKey(t *testing.T) {
+	v := NewBatchVerifier()
 	populateBatchVerifier(t, &v)
 	v.entries[1].pubkey[1] ^= 1
-	if v.VerifyBatch() {
+	if v.Verify() {
 		t.Error("batch verification should fail due to corrupt key")
 	}
+}
 
-	// corrput a signature to check batch verification fails
+func TestBatchFailsOnCorruptSignature(t *testing.T) {
+	v := NewBatchVerifier()
+
 	populateBatchVerifier(t, &v)
+	// corrupt the R value of one of the signatures
 	v.entries[4].signature[1] ^= 1
-	if v.VerifyBatch() {
-		t.Error("batch verification should fail due to corrupt key")
+	if v.Verify() {
+		t.Error("batch verification should fail due to corrupt signature")
 	}
 
 	populateBatchVerifier(t, &v)
 	// negate a scalar to check batch verification fails
 	v.entries[1].k.Negate(edwards25519.NewScalar())
-	if v.VerifyBatch() {
-		t.Error("batch verification should fail due to corrupt key")
+	if v.Verify() {
+		t.Error("batch verification should fail due to corrupt signature")
 	}
+}
 
+func TestEmptyBatchFails(t *testing.T) {
+	v := NewBatchVerifier()
+
+	if v.Verify() {
+		t.Error("batch verification should fail on an empty batch")
+	}
 }
 
 func BenchmarkVerifyBatch(b *testing.B) {
@@ -51,7 +73,7 @@ func BenchmarkVerifyBatch(b *testing.B) {
 			}
 			// NOTE: dividing by n so that metrics are per-signature
 			for i := 0; i < b.N/n; i++ {
-				if !v.VerifyBatch() {
+				if !v.Verify() {
 					b.Fatal("signature set failed batch verification")
 				}
 			}
@@ -61,6 +83,7 @@ func BenchmarkVerifyBatch(b *testing.B) {
 
 // populateBatchVerifier populates a verifier with multiple entries
 func populateBatchVerifier(t *testing.T, v *BatchVerifier) {
+	*v = NewBatchVerifier()
 	for i := 0; i <= 38; i++ {
 
 		pub, priv, _ := ed25519.GenerateKey(nil)
@@ -74,8 +97,6 @@ func populateBatchVerifier(t *testing.T, v *BatchVerifier) {
 
 		sig := ed25519.Sign(priv, msg)
 
-		if !v.Add(pub, sig, msg) {
-			t.Error("unable to add s k m")
-		}
+		v.Add(pub, msg, sig)
 	}
 }

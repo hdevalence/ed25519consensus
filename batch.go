@@ -8,38 +8,44 @@ import (
 	"filippo.io/edwards25519"
 )
 
-// BatchVerifier holds entries of public keys, signature and a scalar which are used for batch verification.
+// BatchVerifier accumulates batch entries with Add, before performing batch verification with Verify.
 type BatchVerifier struct {
-	entries []ks
+	entries []entry
 }
 
-// ks represents the public key, signature and scalar which the caller wants to batch verify
-type ks struct {
+// entry represents a batch entry with the public key, signature and scalar which the caller wants to verify
+type entry struct {
 	pubkey    ed25519.PublicKey
 	signature []byte
 	k         *edwards25519.Scalar
 }
 
-// NewBatchVerifier creates a Verifier that entries of signatures, keys and messages
-// can be added to for verification
+// NewBatchVerifier creates an empty BatchVerifier.
 func NewBatchVerifier() BatchVerifier {
 	return BatchVerifier{
-		entries: []ks{},
+		entries: []entry{},
 	}
 }
 
-// Add adds a (public key, signature, message) triple to the current batch.
-func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bool {
-	if l := len(publicKey); l != ed25519.PublicKeySize {
-		return false
-	}
-
-	if len(sig) != ed25519.SignatureSize || sig[63]&224 != 0 {
-		return false
-	}
+// Add adds a (public key, message, sig) triple to the current batch.
+func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
+	// Compute the challenge scalar for this entry upfront, so that we don't
+	// introduce a dependency on the lifetime of the message array. This doesn't
+	// matter so much for Go, which has garbage collection, but did matter for
+	// the Rust implementation this was ported from, but not keeping buffers
+	// alive for longer than they have to is nice to do anyways.
 
 	h := sha512.New()
-	h.Write(sig[:32])
+
+	// R_bytes is the first 32 bytes of the signature, but because the signature
+	// is passed as a variable-length array it could be too short. In that case
+	// we'll fail in Verify, so just avoid a panic here.
+	n := 32
+	if len(sig) < n {
+		n = len(sig)
+	}
+	h.Write(sig[:n])
+
 	h.Write(publicKey)
 	h.Write(message)
 	var digest [64]byte
@@ -47,22 +53,29 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, sig, message []byte) bo
 
 	k := new(edwards25519.Scalar).SetUniformBytes(digest[:])
 
-	ksS := ks{
+	e := entry{
 		pubkey:    publicKey,
 		signature: sig,
 		k:         k,
 	}
 
-	v.entries = append(v.entries, ksS)
-
-	return true
+	v.entries = append(v.entries, e)
 }
 
-// Verify checks all entries in the current batch, returning `true` if
-// *all* entries are valid and `false` if *any one* entry is invalid.
+// Verify checks all entries in the current batch, returning true if all entries
+// are valid and false if any one entry is invalid.
 //
-// If a failure arises it is unknown which entry failed, the caller must verify each entry individually.
-func (v *BatchVerifier) VerifyBatch() bool {
+// If a failure arises it is unknown which entry failed, the caller must verify
+// each entry individually.
+//
+// Calling Verify on an empty batch returns false.
+func (v *BatchVerifier) Verify() bool {
+	vl := len(v.entries)
+	// Abort early on an empty batch, which probably indicates a bug
+	if vl == 0 {
+		return false
+	}
+
 	// The batch verification equation is
 	//
 	// [-sum(z_i * s_i)]B + sum([z_i]R_i) + sum([z_i * k_i]A_i) = 0.
@@ -72,7 +85,6 @@ func (v *BatchVerifier) VerifyBatch() bool {
 	// - s_i is the signature's s value;
 	// - k_i is the hash of the message and other data;
 	// - z_i is a random 128-bit Scalar.
-	vl := len(v.entries)
 	svals := make([]edwards25519.Scalar, 1+vl+vl)
 	scalars := make([]*edwards25519.Scalar, 1+vl+vl)
 
@@ -96,6 +108,12 @@ func (v *BatchVerifier) VerifyBatch() bool {
 
 	B.Set(edwards25519.NewGeneratorPoint())
 	for i, entry := range v.entries {
+		// Check that the signature is exactly 64 bytes upfront,
+		// so that we can slice it later without potential panics
+		if len(entry.signature) != 64 {
+			return false
+		}
+
 		if _, err := Rs[i].SetBytes(entry.signature[:32]); err != nil {
 			return false
 		}
@@ -120,9 +138,6 @@ func (v *BatchVerifier) VerifyBatch() bool {
 		Acoeffs[i].Multiply(Rcoeffs[i], entry.k)
 	}
 	Bcoeff.Negate(Bcoeff) // this term is subtracted in the summation
-
-	// purge BatchVerifier for reuse
-	v.entries = []ks{}
 
 	check := new(edwards25519.Point).VarTimeMultiScalarMult(scalars, points)
 	check.MultByCofactor(check)
