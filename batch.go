@@ -8,19 +8,19 @@ import (
 	"filippo.io/edwards25519"
 )
 
-// BatchVerifier accumulates batch entries with `Add`, before performing batch verification with `Verify`.
+// BatchVerifier accumulates batch entries with Add, before performing batch verification with Verify.
 type BatchVerifier struct {
 	entries []entry
 }
 
-// item represents a batch entry with the public key, signature and scalar which the caller wants to verify
+// entry represents a batch entry with the public key, signature and scalar which the caller wants to verify
 type entry struct {
 	pubkey    ed25519.PublicKey
 	signature []byte
 	k         *edwards25519.Scalar
 }
 
-// NewBatchVerifier creates an empty `BatchVerifier`.
+// NewBatchVerifier creates an empty BatchVerifier.
 func NewBatchVerifier() BatchVerifier {
 	return BatchVerifier{
 		entries: []entry{},
@@ -62,12 +62,13 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
 	v.entries = append(v.entries, e)
 }
 
-// Verify checks all entries in the current batch, returning `true` if
-// *all* entries are valid and `false` if *any one* entry is invalid.
+// Verify checks all entries in the current batch, returning true if all entries
+// are valid and false if any one entry is invalid.
 //
-// If a failure arises it is unknown which entry failed, the caller must verify each entry individually.
+// If a failure arises it is unknown which entry failed, the caller must verify
+// each entry individually.
 //
-// Calling `Verify` on an empty batch returns `false`.
+// Calling Verify on an empty batch returns false.
 func (v *BatchVerifier) Verify() bool {
 	vl := len(v.entries)
 	// Abort early on an empty batch, which probably indicates a bug
