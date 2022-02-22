@@ -51,7 +51,10 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
 	var digest [64]byte
 	h.Sum(digest[:0])
 
-	k := new(edwards25519.Scalar).SetUniformBytes(digest[:])
+	k, err := new(edwards25519.Scalar).SetUniformBytes(digest[:])
+	if err != nil {
+		panic(err)
+	}
 
 	e := entry{
 		pubkey:    publicKey,
