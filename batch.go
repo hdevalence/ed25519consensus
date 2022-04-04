@@ -28,7 +28,7 @@ func NewBatchVerifier() BatchVerifier {
 }
 
 // Add adds a (public key, message, sig) triple to the current batch.
-func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
+func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) error {
 	// Compute the challenge scalar for this entry upfront, so that we don't
 	// introduce a dependency on the lifetime of the message array. This doesn't
 	// matter so much for Go, which has garbage collection, but did matter for
@@ -51,7 +51,10 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
 	var digest [64]byte
 	h.Sum(digest[:0])
 
-	k := new(edwards25519.Scalar).SetUniformBytes(digest[:])
+	k, err := new(edwards25519.Scalar).SetUniformBytes(digest[:])
+	if err != nil {
+		return err
+	}
 
 	e := entry{
 		pubkey:    publicKey,
@@ -60,6 +63,7 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
 	}
 
 	v.entries = append(v.entries, e)
+	return nil
 }
 
 // Verify checks all entries in the current batch, returning true if all entries
