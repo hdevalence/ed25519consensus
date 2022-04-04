@@ -53,7 +53,7 @@ func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) er
 
 	k, err := new(edwards25519.Scalar).SetUniformBytes(digest[:])
 	if err != nil {
-		return err
+		panic(err)
 	}
 
 	e := entry{
