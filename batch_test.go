@@ -81,6 +81,54 @@ func BenchmarkVerifyBatch(b *testing.B) {
 	}
 }
 
+func BenchmarkCreateBatch(b *testing.B) {
+	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			b.StopTimer()
+			msg := []byte("CreateBatch")
+			pubs := make([][]byte, n)
+			sigs := make([][]byte, n)
+			for i := 0; i < n; i++ {
+				pub, priv, _ := ed25519.GenerateKey(nil)
+				pubs[i] = pub
+				sigs[i] = ed25519.Sign(priv, msg)
+			}
+			b.StartTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				v := NewBatchVerifier()
+				for j := 0; j < n; j++ {
+					v.Add(pubs[j], msg, sigs[j])
+				}
+			}
+		})
+	}
+}
+
+func BenchmarkCreatePreallocatedBatch(b *testing.B) {
+	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			b.StopTimer()
+			msg := []byte("CreatePreallocatedBatch")
+			pubs := make([][]byte, n)
+			sigs := make([][]byte, n)
+			for i := 0; i < n; i++ {
+				pub, priv, _ := ed25519.GenerateKey(nil)
+				pubs[i] = pub
+				sigs[i] = ed25519.Sign(priv, msg)
+			}
+			b.StartTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				v := NewPreallocatedBatchVerifier(n)
+				for j := 0; j < n; j++ {
+					v.Add(pubs[j], msg, sigs[j])
+				}
+			}
+		})
+	}
+}
+
 // populateBatchVerifier populates a verifier with multiple entries
 func populateBatchVerifier(t *testing.T, v *BatchVerifier) {
 	*v = NewBatchVerifier()

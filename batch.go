@@ -27,6 +27,15 @@ func NewBatchVerifier() BatchVerifier {
 	}
 }
 
+// NewPreallocatedBatchVerifier creates a new BatchVerifier with
+// a preallocated capacity. If you know the size of the batch you plan
+// to create ahead of time, this can prevent needless memory copies.
+func NewPreallocatedBatchVerifier(size int) BatchVerifier {
+	return BatchVerifier{
+		entries: make([]entry, 0, size),
+	}
+}
+
 // Add adds a (public key, message, sig) triple to the current batch.
 func (v *BatchVerifier) Add(publicKey ed25519.PublicKey, message, sig []byte) {
 	// Compute the challenge scalar for this entry upfront, so that we don't
