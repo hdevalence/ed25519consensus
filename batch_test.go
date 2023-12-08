@@ -85,9 +85,11 @@ func BenchmarkCreateBatch(b *testing.B) {
 	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
 		b.Run(fmt.Sprint(n), func(b *testing.B) {
 			b.StopTimer()
-			msg := []byte("CreateBatch")
-			pubs := make([][]byte, n)
-			sigs := make([][]byte, n)
+			var (
+				msg  = []byte("CreateBatch")
+				pubs = make([][]byte, n)
+				sigs = make([][]byte, n)
+			)
 			for i := 0; i < n; i++ {
 				pub, priv, _ := ed25519.GenerateKey(nil)
 				pubs[i] = pub
@@ -109,9 +111,11 @@ func BenchmarkCreatePreallocatedBatch(b *testing.B) {
 	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
 		b.Run(fmt.Sprint(n), func(b *testing.B) {
 			b.StopTimer()
-			msg := []byte("CreatePreallocatedBatch")
-			pubs := make([][]byte, n)
-			sigs := make([][]byte, n)
+			var (
+				msg  = []byte("CreatePreallocatedBatch")
+				pubs = make([][]byte, n)
+				sigs = make([][]byte, n)
+			)
 			for i := 0; i < n; i++ {
 				pub, priv, _ := ed25519.GenerateKey(nil)
 				pubs[i] = pub
