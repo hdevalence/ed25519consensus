@@ -61,74 +61,52 @@ func TestEmptyBatchFails(t *testing.T) {
 	}
 }
 
-func BenchmarkVerifyBatch(b *testing.B) {
-	for _, n := range []int{1, 8, 64, 1024} {
-		b.Run(fmt.Sprint(n), func(b *testing.B) {
-			b.ReportAllocs()
-			v := NewBatchVerifier()
-			for i := 0; i < n; i++ {
-				pub, priv, _ := ed25519.GenerateKey(nil)
-				msg := []byte("BatchVerifyTest")
-				v.Add(pub, msg, ed25519.Sign(priv, msg))
-			}
-			// NOTE: dividing by n so that metrics are per-signature
-			for i := 0; i < b.N/n; i++ {
-				if !v.Verify() {
-					b.Fatal("signature set failed batch verification")
-				}
-			}
-		})
-	}
-}
-
-func BenchmarkCreateBatch(b *testing.B) {
+func BenchmarkBatch(b *testing.B) {
 	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
 		b.Run(fmt.Sprint(n), func(b *testing.B) {
-			b.StopTimer()
-			var (
-				msg  = []byte("CreateBatch")
-				pubs = make([][]byte, n)
-				sigs = make([][]byte, n)
-			)
-			for i := 0; i < n; i++ {
-				pub, priv, _ := ed25519.GenerateKey(nil)
-				pubs[i] = pub
-				sigs[i] = ed25519.Sign(priv, msg)
-			}
-			b.StartTimer()
+			var msg = []byte("ed25519consensus")
+			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				v := NewBatchVerifier()
 				for j := 0; j < n; j++ {
-					v.Add(pubs[j], msg, sigs[j])
+					b.StopTimer()
+					pub, priv, _ := ed25519.GenerateKey(nil)
+					sig := ed25519.Sign(priv, msg)
+					b.StartTimer()
+					v.Add(pub, msg, sig)
+				}
+				if !v.Verify() {
+					b.Fail()
 				}
 			}
+			// Divide by n to get per-signature values.
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(n), "ns/sig")
 		})
 	}
 }
 
-func BenchmarkCreatePreallocatedBatch(b *testing.B) {
+func BenchmarkPreallocatedBatch(b *testing.B) {
 	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
 		b.Run(fmt.Sprint(n), func(b *testing.B) {
-			b.StopTimer()
-			var (
-				msg  = []byte("CreatePreallocatedBatch")
-				pubs = make([][]byte, n)
-				sigs = make([][]byte, n)
-			)
-			for i := 0; i < n; i++ {
-				pub, priv, _ := ed25519.GenerateKey(nil)
-				pubs[i] = pub
-				sigs[i] = ed25519.Sign(priv, msg)
-			}
-			b.StartTimer()
+			var msg = []byte("ed25519consensus")
+			b.ResetTimer()
 			b.ReportAllocs()
 			for i := 0; i < b.N; i++ {
 				v := NewPreallocatedBatchVerifier(n)
 				for j := 0; j < n; j++ {
-					v.Add(pubs[j], msg, sigs[j])
+					b.StopTimer()
+					pub, priv, _ := ed25519.GenerateKey(nil)
+					sig := ed25519.Sign(priv, msg)
+					b.StartTimer()
+					v.Add(pub, msg, sig)
+				}
+				if !v.Verify() {
+					b.Fail()
 				}
 			}
+			// Divide by n to get per-signature values.
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(n), "ns/sig")
 		})
 	}
 }
