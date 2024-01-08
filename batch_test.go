@@ -4,8 +4,6 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"testing"
-
-	"filippo.io/edwards25519"
 )
 
 func TestBatch(t *testing.T) {
@@ -46,8 +44,7 @@ func TestBatchFailsOnCorruptSignature(t *testing.T) {
 	}
 
 	populateBatchVerifier(t, &v)
-	// negate a scalar to check batch verification fails
-	v.entries[1].k.Negate(edwards25519.NewScalar())
+	v.entries[1].digest[1] ^= 1
 	if v.Verify() {
 		t.Error("batch verification should fail due to corrupt signature")
 	}
