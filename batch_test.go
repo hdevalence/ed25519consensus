@@ -4,8 +4,6 @@ import (
 	"crypto/ed25519"
 	"fmt"
 	"testing"
-
-	"filippo.io/edwards25519"
 )
 
 func TestBatch(t *testing.T) {
@@ -46,8 +44,7 @@ func TestBatchFailsOnCorruptSignature(t *testing.T) {
 	}
 
 	populateBatchVerifier(t, &v)
-	// negate a scalar to check batch verification fails
-	v.entries[1].k.Negate(edwards25519.NewScalar())
+	v.entries[1].digest[1] ^= 1
 	if v.Verify() {
 		t.Error("batch verification should fail due to corrupt signature")
 	}
@@ -61,22 +58,52 @@ func TestEmptyBatchFails(t *testing.T) {
 	}
 }
 
-func BenchmarkVerifyBatch(b *testing.B) {
-	for _, n := range []int{1, 8, 64, 1024} {
+func BenchmarkBatch(b *testing.B) {
+	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
 		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			var msg = []byte("ed25519consensus")
+			b.ResetTimer()
 			b.ReportAllocs()
-			v := NewBatchVerifier()
-			for i := 0; i < n; i++ {
-				pub, priv, _ := ed25519.GenerateKey(nil)
-				msg := []byte("BatchVerifyTest")
-				v.Add(pub, msg, ed25519.Sign(priv, msg))
-			}
-			// NOTE: dividing by n so that metrics are per-signature
-			for i := 0; i < b.N/n; i++ {
+			for i := 0; i < b.N; i++ {
+				v := NewBatchVerifier()
+				for j := 0; j < n; j++ {
+					b.StopTimer()
+					pub, priv, _ := ed25519.GenerateKey(nil)
+					sig := ed25519.Sign(priv, msg)
+					b.StartTimer()
+					v.Add(pub, msg, sig)
+				}
 				if !v.Verify() {
-					b.Fatal("signature set failed batch verification")
+					b.Fail()
 				}
 			}
+			// Divide by n to get per-signature values.
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(n), "ns/sig")
+		})
+	}
+}
+
+func BenchmarkPreallocatedBatch(b *testing.B) {
+	for _, n := range []int{1, 8, 64, 1024, 4096, 16384} {
+		b.Run(fmt.Sprint(n), func(b *testing.B) {
+			var msg = []byte("ed25519consensus")
+			b.ResetTimer()
+			b.ReportAllocs()
+			for i := 0; i < b.N; i++ {
+				v := NewPreallocatedBatchVerifier(n)
+				for j := 0; j < n; j++ {
+					b.StopTimer()
+					pub, priv, _ := ed25519.GenerateKey(nil)
+					sig := ed25519.Sign(priv, msg)
+					b.StartTimer()
+					v.Add(pub, msg, sig)
+				}
+				if !v.Verify() {
+					b.Fail()
+				}
+			}
+			// Divide by n to get per-signature values.
+			b.ReportMetric(float64(b.Elapsed().Nanoseconds())/float64(b.N)/float64(n), "ns/sig")
 		})
 	}
 }
